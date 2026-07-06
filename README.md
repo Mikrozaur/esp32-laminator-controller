@@ -88,9 +88,7 @@ Voltage regulator:
 
 - AMS1117-3.3
 
-Relay module:## Relay Module
-
-![Relay Module](Images/relay_module.png)
+Relay module:#
 
 - Standard 4-channel relay board
 - Active LOW inputs
@@ -124,6 +122,8 @@ Unused GPIO:
 ---
 
 ## Relay Module
+
+  <img src="Images/relay_module.png" width="50%">
 
 The project uses a standard **4-channel Active LOW relay module**.
 
