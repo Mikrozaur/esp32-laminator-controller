@@ -75,7 +75,7 @@ This architecture significantly improves safety, simplifies debugging, and makes
 ---
 
 ## Hardware
-
+  <img src="Images/Laminator_shematic.png" width="50%">
 Controller:
 
 - ESP32-C3 LuatOS Core
