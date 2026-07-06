@@ -88,7 +88,9 @@ Voltage regulator:
 
 - AMS1117-3.3
 
-Relay module:
+Relay module:## Relay Module
+
+![Relay Module](images/relay_module.png)
 
 - Standard 4-channel relay board
 - Active LOW inputs
