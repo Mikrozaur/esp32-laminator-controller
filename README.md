@@ -2,7 +2,7 @@
 
 [Русская версия](README_RU.md)
 
-![Banner](images/banner.png)
+![Banner](Images/banner.png)
 
 Modern open-source controller for roll laminators based on ESP32-C3 and ESPHome.
 
