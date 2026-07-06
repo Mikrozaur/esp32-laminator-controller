@@ -123,7 +123,7 @@ Unused GPIO:
 
 ## Relay Module
 
-  <img src="Images/relay_module.png" width="50%">
+  <img src="Images/relay_module.png" width="90%">
 
 The project uses a standard **4-channel Active LOW relay module**.
 
