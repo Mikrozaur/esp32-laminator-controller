@@ -1,6 +1,6 @@
 # ESP32 Roll Laminator Controller
 
-[Русская версия](README_RU.md)
+[Русская версия](README_ru.md)
 
 ![Banner](Images/banner.png)
 
