@@ -1,0 +1,744 @@
+# ==========================================================
+# ESP32 Roll Laminator Controller
+#
+# Firmware Version : 1.0
+# Framework        : ESPHome
+# Target           : ESP32-C3
+#
+# https://github.com/Mikrozaur/esp32-laminator-controller
+# ==========================================================
+
+esphome:
+  name: esp32laminator
+  friendly_name: Laminator
+
+  on_boot:
+    priority: -10
+    then:
+      - component.update: current_temperature
+      - script.execute: update_direction
+      - script.execute: update_seal
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+preferences:
+  flash_write_interval: 60s
+
+logger:
+   level: WARN
+
+# =========================
+# WIFI
+# =========================
+wifi:
+  ssid: !secret wifi_ssid_base
+  password: !secret wifi_password_base
+  power_save_mode: LIGHT
+  output_power: 12dB
+#  manual_ip:
+#    static_ip: 192.168.x.x
+#    gateway: 192.168.x.x
+#    subnet: 255.255.255.0
+
+  ap:
+    ssid: "esp32mini Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+
+# =========================
+# API
+# =========================
+api:
+  encryption:
+    key: !secret api_key
+ota:
+  - platform: esphome
+    password: !secret ota_password
+web_server:
+  port: 80 
+
+
+globals:
+  - id: display_mode
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+
+# ==========================================================
+# DIGITAL INPUTS
+# ==========================================================
+binary_sensor:
+
+# --------------------------------------------------------
+# MASTER
+# Main power switch
+#
+# LOW  = OFF
+# HIGH = ON (due to inverted logic)
+# --------------------------------------------------------
+
+  - platform: gpio
+    id: master_sw
+    name: "MASTER"
+
+    pin:
+      number: GPIO2
+      mode:
+        input: true
+      inverted: true
+
+  # --------------------------------------------------------
+  # SEAL
+  # Heating enable switch
+  # --------------------------------------------------------
+  - platform: gpio
+    id: seal_sw
+    name: "SEAL"
+
+    pin:
+      number: GPIO6
+      mode:
+        input: true
+      inverted: true
+    on_state:
+      then:
+        - script.execute: update_seal
+
+
+# --------------------------------------------------------
+# DIR
+# Motor direction switch
+# --------------------------------------------------------
+
+  - platform: gpio
+    id: dir_sw
+    name: "DIR"
+    internal: true
+    pin:
+      number: GPIO3
+      mode:
+        input: true
+ #     inverted: true
+    on_state:
+      then:
+        - script.execute: update_direction
+# ==========================================================
+# RELAY OUTPUTS
+# Currently controlled manually from Home Assistant
+# ==========================================================
+switch:
+
+# --------------------------------------------------------
+# Heater relay
+# --------------------------------------------------------
+  - platform: gpio
+    id: heater_relay
+    name: "Heater Relay"
+    pin: 
+      number: GPIO5
+      inverted: true
+    restore_mode: ALWAYS_OFF
+# --------------------------------------------------------
+# Motor reverse relay
+# --------------------------------------------------------
+  - platform: gpio
+    id: reverse_relay
+    name: "Reverse Relay"
+    internal: true
+    pin:
+      number: GPIO4
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
+# ==========================================================
+# OUTPUTS
+# ==========================================================
+output:
+
+# --------------------------------------------------------
+# PREHEAT LED
+# Active LOW
+# --------------------------------------------------------
+  - platform: gpio
+    id: led_preheat_out
+
+    pin:
+      number: GPIO21
+      inverted: true
+
+# --------------------------------------------------------
+# WORK LED
+# Active LOW
+# --------------------------------------------------------
+  - platform: gpio
+    id: led_work_out
+
+    pin:
+      number: GPIO20
+      inverted: true
+
+# --------------------------------------------------------
+# Analog temperature meter
+# PWM output
+# Can be replaced with WS2812 LEDs in future versions
+# --------------------------------------------------------
+  - platform: ledc
+    id: meter_pwm
+
+    pin: GPIO7
+
+    frequency: 1000 Hz
+
+
+# ==========================================================
+# STATUS LEDS
+# ==========================================================
+light:
+
+  # --------------------------------------------------------
+  # PREHEAT
+  # --------------------------------------------------------
+  - platform: binary
+
+    id: led_preheat
+    name: "LED PREHEAT"
+
+    output: led_preheat_out
+
+  # --------------------------------------------------------
+  # WORK
+  # --------------------------------------------------------
+  - platform: binary
+
+    id: led_work
+    name: "LED WORK"
+
+    output: led_work_out
+
+
+# ==========================================================
+# ANALOG SENSORS
+# ==========================================================
+sensor:
+
+# --------------------------------------------------------
+# Internal ADC input
+# NTC voltage divider
+# --------------------------------------------------------
+  - platform: adc
+    id: ntc_adc
+
+    internal: true
+
+    pin: GPIO0
+
+    attenuation: auto
+
+    update_interval: 500ms
+
+# --------------------------------------------------------
+# NTC resistance calculation
+# --------------------------------------------------------
+  - platform: resistance
+
+    id: ntc_resistance
+
+    internal: true
+
+    sensor: ntc_adc
+
+    configuration: DOWNSTREAM
+
+    resistor: 47kOhm
+
+  - platform: ntc
+
+    id: ntc_temperature
+
+    name: "Temperature"
+
+    sensor: ntc_resistance
+
+    calibration:
+      b_constant: 4300
+      reference_temperature: 25°C
+      reference_resistance: 100kOhm
+
+    on_value:
+      then:
+        - component.update: current_temperature
+
+# --------------------------------------------------------
+# Potentiometer ADC
+# --------------------------------------------------------
+  - platform: adc
+    id: potentiometer
+
+    name: "Potentiometer"
+
+    pin: GPIO1
+
+    update_interval: 100ms
+
+    attenuation: auto
+
+    filters:
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
+
+# ==========================================================
+# CURRENT TEMPERATURE
+# Temperature after calibration correction
+# ==========================================================
+
+  - platform: template
+
+    id: current_temperature
+
+    name: "Current Temperature"
+
+    unit_of_measurement: "°C"
+
+    accuracy_decimals: 0
+
+    lambda: |-
+
+      float t =
+          25.0 +
+          (id(ntc_temperature).state - 25.0) *
+          (175.0 / 60.0);
+
+      t = roundf(t);
+
+      if (t < 25.0)
+        t = 25.0;
+
+      if (t > 200.0)
+        t = 200.0;
+
+      return t;
+
+    update_interval: never
+
+    on_value:
+      then:
+        - script.execute: update_heater
+
+  # --------------------------------------------------------
+  # Temperature Setpoint
+  # --------------------------------------------------------
+  - platform: template
+
+    id: temperature_setpoint
+
+    name: "Temperature Setpoint"
+
+    unit_of_measurement: "°C"
+
+    accuracy_decimals: 1
+
+    lambda: |-
+      const float v = id(potentiometer).state;
+
+      const float min_v = 0.01;
+      const float max_v = 2.89;
+
+      float t = 100.0 + (v - min_v) * 100.0 / (max_v - min_v);
+
+      t = roundf(t);
+
+      if (t < 100.0) t = 100.0;
+      if (t > 200.0) t = 200.0;
+
+      return t;
+
+    update_interval: 200ms
+
+    filters:
+      - delta: 1.0
+
+    on_value:
+      then:
+
+        # Switch display to Setpoint
+        - lambda: |-
+            id(display_mode) = true;
+        - logger.log:
+            level: INFO
+            format: "Display Timeout"
+
+        # Restart display timeout
+        - script.execute: display_timeout
+
+# ==========================================================
+# USER SETTINGS
+# ==========================================================
+number:
+  # --------------------------------------------------------
+  # Temperature Hysteresis
+  # Heater OFF  : Temperature >= Setpoint
+  # Heater ON   : Temperature < Setpoint - Hysteresis
+  # --------------------------------------------------------
+  - platform: template
+    id: temperature_hysteresis
+    name: "Temperature Hysteresis"
+
+    optimistic: true
+    restore_value: true
+
+    min_value: 1.0
+    max_value: 10.0
+    step: 0.5
+
+    initial_value: 2.0
+
+    unit_of_measurement: "°C"
+
+    mode: box
+
+
+  # --------------------------------------------------------
+  # Setpoint Apply Delay
+  # Delay after the last potentiometer movement before
+  # applying the new temperature setpoint.
+  # --------------------------------------------------------
+  - platform: template
+    id: setpoint_apply_delay
+    name: "Setpoint Apply Delay"
+
+    optimistic: true
+    restore_value: true
+
+    min_value: 2
+    max_value: 5
+    step: 1
+
+    initial_value: 2
+
+    unit_of_measurement: "s"
+
+    mode: box
+
+# ==========================================================
+# TEXT SENSORS
+# ==========================================================
+text_sensor:
+
+  # --------------------------------------------------------
+  # Heater status
+  # --------------------------------------------------------
+  - platform: template
+    id: heater_status
+    name: "Heater"
+    icon: mdi:radiator
+
+
+  - platform: template
+    id: rotate_direction
+    name: "Rotate Direction"
+    icon: "mdi:rotate-right"
+
+
+# ==========================================================
+# DISPLAY UPDATE
+# ==========================================================
+interval:
+
+  # --------------------------------------------------------
+  # LED indication
+  # --------------------------------------------------------
+  - interval: 1s
+
+    then:
+
+      # WORK
+      - light.turn_on: led_work
+
+      # PREHEAT
+      - if:
+          condition:
+            binary_sensor.is_on: seal_sw
+
+          then:
+            - light.turn_on: led_preheat
+
+      # Start pulse timers
+      - script.execute: work_pulse_off
+      - script.execute: preheat_pulse_off
+
+  # --------------------------------------------------------
+  # Update analog indicator
+  # --------------------------------------------------------
+  - interval: 100ms
+
+    then:
+
+      - lambda: |-
+
+          // ------------------------------------------------
+          // Display calibration
+          // ------------------------------------------------
+          const float DISPLAY_TEMP_MIN = 100.0;
+          const float DISPLAY_TEMP_MAX = 200.0;
+
+          const float PWM_MIN = 0.01;
+          const float PWM_MAX = 0.75;
+
+          // ------------------------------------------------
+          // Select temperature to display
+          // ------------------------------------------------
+          float display_temperature =
+              id(display_mode)
+                  ? id(temperature_setpoint).state
+                  : id(current_temperature).state;
+
+          // ------------------------------------------------
+          // Convert temperature to PWM
+          // ------------------------------------------------
+          float pwm =
+              PWM_MIN +
+              (display_temperature - DISPLAY_TEMP_MIN) *
+              (PWM_MAX - PWM_MIN) /
+              (DISPLAY_TEMP_MAX - DISPLAY_TEMP_MIN);
+
+          // ------------------------------------------------
+          // Limit PWM range
+          // ------------------------------------------------
+          if (pwm < PWM_MIN)
+            pwm = PWM_MIN;
+
+          if (pwm > PWM_MAX)
+            pwm = PWM_MAX;
+
+          // ------------------------------------------------
+          // Update analog meter
+          // ------------------------------------------------
+          id(meter_pwm).set_level(pwm);
+
+# ==========================================================
+# Update motor direction
+#
+# DIR = OFF -> Forward
+# DIR = ON  -> Reverse
+# ==========================================================
+
+script:
+
+  # --------------------------------------------------------
+  # WORK LED pulse
+  # MASTER OFF -> pulse
+  # MASTER ON  -> always ON
+  # --------------------------------------------------------
+  - id: work_pulse_off
+
+    mode: restart
+
+    then:
+
+      - delay: 100ms
+
+      - if:
+          condition:
+            binary_sensor.is_off: master_sw
+
+          then:
+            - light.turn_off: led_work
+
+
+  # --------------------------------------------------------
+  # PREHEAT LED pulse
+  #
+  # SEAL OFF        -> OFF
+  # Heater ON       -> ON
+  # Heater OFF      -> pulse
+  # --------------------------------------------------------
+  - id: preheat_pulse_off
+
+    mode: restart
+
+    then:
+
+      - delay: 100ms
+
+      - if:
+          condition:
+            binary_sensor.is_on: seal_sw
+
+          then:
+
+            - if:
+                condition:
+                  switch.is_off: heater_relay
+
+                then:
+                  - light.turn_off: led_preheat
+
+          else:
+
+            - light.turn_off: led_preheat
+
+
+  - id: update_direction
+
+    mode: restart
+
+    then:
+
+      - if:
+          condition:
+            binary_sensor.is_on: dir_sw
+
+          then:
+
+            # Reverse
+            - switch.turn_on: reverse_relay
+
+            - text_sensor.template.publish:
+                id: rotate_direction
+                state: "Reverse"
+
+          else:
+
+            # Forward
+            - switch.turn_off: reverse_relay
+
+            - text_sensor.template.publish:
+                id: rotate_direction
+                state: "Forward"
+
+
+  # --------------------------------------------------------
+  # Update heater permission
+  #
+  # SEAL OFF
+  #   -> Heater OFF
+  #
+  # SEAL ON
+  #   -> Heating allowed
+  #      (heater will be controlled by update_heater())
+  # --------------------------------------------------------
+  - id: update_seal
+
+    mode: restart
+
+    then:
+
+      - if:
+          condition:
+            binary_sensor.is_off: seal_sw
+
+          then:
+
+            - switch.turn_off: heater_relay
+            - light.turn_off: led_preheat
+
+  # --------------------------------------------------------
+  # Update heater control
+  #
+  # SEAL OFF
+  #   -> Heater OFF
+  #
+  # SEAL ON
+  #
+  # Heater OFF:
+  #   Current <= Setpoint - Hysteresis
+  #     -> Heater ON
+  #
+  # Heater ON:
+  #   Current >= Setpoint
+  #     -> Heater OFF
+  # --------------------------------------------------------
+  - id: update_heater
+
+    mode: restart
+
+    then:
+
+      # ----------------------------------------------------
+      # Heating disabled
+      # ----------------------------------------------------
+      - if:
+          condition:
+            binary_sensor.is_off: seal_sw
+
+          then:
+
+            - switch.turn_off: heater_relay
+
+            - text_sensor.template.publish:
+                id: heater_status
+                state: "Cooling"
+
+          else:
+
+            # ------------------------------------------------
+            # Heater currently OFF
+            # ------------------------------------------------
+            - if:
+                condition:
+                  switch.is_off: heater_relay
+
+                then:
+
+                  - if:
+                      condition:
+                        lambda: |-
+                          return id(current_temperature).state <=
+                                 (id(temperature_setpoint).state -
+                                  id(temperature_hysteresis).state);
+
+                      then:
+
+                        - switch.turn_on: heater_relay
+
+                        - text_sensor.template.publish:
+                            id: heater_status
+                            state: "Heating"
+
+                else:
+
+                  # --------------------------------------------
+                  # Heater currently ON
+                  # --------------------------------------------
+                  - if:
+                      condition:
+                        lambda: |-
+                          return id(current_temperature).state >=
+                                 id(temperature_setpoint).state;
+
+                      then:
+
+                        - switch.turn_off: heater_relay
+
+                        - text_sensor.template.publish:
+                            id: heater_status
+                            state: "Cooling"
+
+  - id: update_display
+
+    mode: restart
+
+    then: []
+
+  # --------------------------------------------------------
+  # Display timeout
+  # --------------------------------------------------------
+  - id: display_timeout
+
+    mode: restart
+
+    then:
+
+      - delay: !lambda |-
+          return (uint32_t)(id(setpoint_apply_delay).state * 1000);
+
+      - lambda: |-
+          id(display_mode) = false;
