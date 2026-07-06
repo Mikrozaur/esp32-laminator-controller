@@ -90,7 +90,7 @@ Voltage regulator:
 
 Relay module:## Relay Module
 
-![Relay Module](images/relay_module.png)
+![Relay Module](Images/relay_module.png)
 
 - Standard 4-channel relay board
 - Active LOW inputs
