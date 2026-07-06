@@ -1,5 +1,12 @@
 # ESP32 Roll Laminator Controller
 
+[Русская версия](README_RU.md)
+
+![Banner](images/banner.png)
+
+Modern open-source controller for roll laminators based on ESP32-C3 and ESPHome.
+
+
 Modern replacement controller for inexpensive roll laminators based on **ESP32-C3** and **ESPHome**.
 
 The project replaces the original controller board with a fully programmable, modular, and repairable solution built from standard components.
