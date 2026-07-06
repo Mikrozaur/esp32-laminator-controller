@@ -76,7 +76,7 @@ This architecture significantly improves safety, simplifies debugging, and makes
 Controller:
 
 - ESP32-C3 LuatOS Core
-    <img src="Images/esp32c3.png" width="50%">
+    <img src="Images/Esp32c3.png" width="50%">
 
 Temperature sensor:
 
