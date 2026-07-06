@@ -4,9 +4,6 @@
 
 ![Banner](Images/banner.png)
 
-Modern open-source controller for roll laminators based on ESP32-C3 and ESPHome.
-
-
 Modern replacement controller for inexpensive roll laminators based on **ESP32-C3** and **ESPHome**.
 
 The project replaces the original controller board with a fully programmable, modular, and repairable solution built from standard components.
@@ -123,7 +120,7 @@ Unused GPIO:
 
 ## Relay Module
 
-  <img src="Images/relay_module.png" width="90%">
+  <img src="Images/relay_module.png" width="50%">
 
 The project uses a standard **4-channel Active LOW relay module**.
 
@@ -152,7 +149,7 @@ Hardware/
     PCB
     KiCad project
 
-Documentation/
+docs/
     Technical specification
     Calibration notes
 
